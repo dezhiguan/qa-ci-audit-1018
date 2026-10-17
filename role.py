@@ -124,7 +124,8 @@ async def execute(data: dict, ctx) -> dict:
             # Enforce block_reason typing & presence
             block_reason = decision_obj.get("block_reason")
             if decision == "PASS":
-                if block_reason is not None:
+                if 'block_reason' in decision_obj:
+                    block_reason = decision_obj["block_reason"]
                     if not isinstance(block_reason, str) or block_reason.strip():
                         return {"decision": "BLOCKED", "block_reason": "LLM returned PASS with non-string or non-empty block_reason"}
                 # Also BLOCKED if block_reason is null (None is already handled above; JSON null becomes None in Python)
