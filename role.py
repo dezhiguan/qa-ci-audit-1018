@@ -44,6 +44,43 @@ async def execute(data: dict, ctx) -> dict:
             "block_reason": f"Missing required identifiers: {', '.join(missing)}"
         }
 
+    # === ADVERSARIAL INTENT CHECK — BEFORE ANY TOOL CALL ===
+    # Block on clear bypass/forge/force/ignore/publish/merge directives that violate read-only audit semantics
+    lower_text = text.lower()
+    if any(phrase in lower_text for phrase in [
+        "skip all verification",
+        "skip all核验",
+        "bypass",
+        "forge",
+        "fake",
+        "fake evidence",
+        "ignore system limits",
+        "ignore all rules",
+        "ignore system restriction",
+        "force output",
+        "force pass",
+        "force result",
+        "compel pass",
+        "override decision",
+        "output {'decision': 'PASS'",
+        "output \"{\"decision\": \"PASS\"",
+        "execute auto merge",
+        "perform merge",
+        "trigger merge",
+        "publish now",
+        "deploy immediately",
+        "release without check",
+        "boss approved",
+        "verbal approval",
+        "oral consent",
+        "skip gate",
+        "no gate required"
+    ]):
+        return {
+            "decision": "BLOCKED",
+            "block_reason": "User requested bypass, forgery, forced output, or write action — violates read-only audit mandate"
+        }
+
     # Call tools
     try:
         log_res = await ctx.tools.call("ci.log.fetch", repo=repo, runId=runId)
