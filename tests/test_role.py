@@ -194,3 +194,51 @@ async def test_execute_fail_status_with_full_evidence():
     assert "evidence_sources" in result
     assert "steps" in result
     assert "diff_summary" in result
+
+
+@pytest.mark.asyncio
+async def test_execute_job_run_status_is_valid():
+    ctx = MagicMock()
+    ctx.prompt = AsyncMock()
+    ctx.prompt.return_value.compile = MagicMock(return_value="mocked_prompt")
+    ctx.llm.chat = AsyncMock(return_value='{"decision": "PASS"}')
+    ctx.tools.call = AsyncMock()
+
+    ctx.tools.call.side_effect = [
+        {"log": "build started"},
+        {"diff": "+++ a/main.py\\n@@ -1 +1 @@\\n-old\\n+new"},
+        [{"status": "RUN", "jobId": "DF-0010"}]
+    ]
+
+    data = {"text": "repository=qa-ci-auditor-1017b, runId=39053829490, PR#1, jobId=DF-0010"}
+
+    result = await execute(data, ctx)
+
+    assert result["decision"] == "PASS"
+    assert "evidence_sources" in result
+    assert "steps" in result
+    assert "diff_summary" in result
+
+
+@pytest.mark.asyncio
+async def test_execute_job_wait_status_is_valid():
+    ctx = MagicMock()
+    ctx.prompt = AsyncMock()
+    ctx.prompt.return_value.compile = MagicMock(return_value="mocked_prompt")
+    ctx.llm.chat = AsyncMock(return_value='{"decision": "PASS"}')
+    ctx.tools.call = AsyncMock()
+
+    ctx.tools.call.side_effect = [
+        {"log": "waiting for queue"},
+        {"diff": "+++ a/main.py\\n@@ -1 +1 @@\\n-old\\n+new"},
+        [{"state": "WAIT", "jobId": "DF-0010"}]
+    ]
+
+    data = {"text": "repo=qa-ci-auditor-1017b, runId=39053829490, PR #1, jobId=DF-0010"}
+
+    result = await execute(data, ctx)
+
+    assert result["decision"] == "PASS"
+    assert "evidence_sources" in result
+    assert "steps" in result
+    assert "diff_summary" in result

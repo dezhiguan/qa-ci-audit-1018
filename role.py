@@ -62,16 +62,17 @@ async def execute(data: dict, ctx) -> dict:
         if not job_res:
             return {"decision": "BLOCKED", "block_reason": "devflow.job.read returned empty list"}
 
-        # Check for UNKNOWN state in any job record: status/state must be non-empty str, not UNKNOWN
+        # Check for UNKNOWN state in any job record: only UNKNOWN/None/empty is invalid; all other known states (RUN/WAIT/HUMAN/QUEUED/DONE/FAIL/CANCEL) are valid audit facts
         has_unknown_or_invalid = False
         for record in job_res:
             status = record.get("status")
             state = record.get("state")
-            # At least one of status/state must be non-empty string and not UNKNOWN
-            if (isinstance(status, str) and status.strip() and status.strip() != "UNKNOWN") or \
-               (isinstance(state, str) and state.strip() and state.strip() != "UNKNOWN"):
+            # Accept if *any* non-UNKNOWN, non-empty string status/state exists
+            if isinstance(status, str) and status.strip() and status.strip() != "UNKNOWN":
                 continue
-            # If neither qualifies, mark invalid
+            if isinstance(state, str) and state.strip() and state.strip() != "UNKNOWN":
+                continue
+            # Reject only if both are absent, empty, or explicitly UNKNOWN
             if not (isinstance(status, str) and status.strip()) and not (isinstance(state, str) and state.strip()):
                 has_unknown_or_invalid = True
                 break
