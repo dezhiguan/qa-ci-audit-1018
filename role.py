@@ -8,11 +8,19 @@ async def execute(data: dict, ctx) -> dict:
     if not isinstance(text, str):
         return {"decision": "BLOCKED", "block_reason": "input.text must be a string"}
 
-    # Extract identifiers using robust regex
-    repo_match = re.search(r'(?:repo|仓库|repository)[\s:=：、，;]+([\w-]+)', text, re.IGNORECASE)
-    runId_match = re.search(r'(?:runId|CI\s+runId|CI\s+运行ID|CI运行)[\s:=：、，;]+(\d+)', text, re.IGNORECASE)
-    pr_match = re.search(r'(?:PR|pr|Pull\s+Request|拉取请求)[\s#：、，;]+(\d+)', text, re.IGNORECASE)
-    jobId_match = re.search(r'(?:jobId|任务|job|DF-)[\s:=：、，;]+(DF-\d+)', text, re.IGNORECASE)
+    # Extract identifiers using robust regex — support tight patterns like "repoqa-evidence-7392" or "runId987654321"
+    repo_match = re.search(r'(?:repo|仓库|repository)[\s:=：、，;]*([\w-]+)', text, re.IGNORECASE)
+    if not repo_match:
+        repo_match = re.search(r'(?:repo|仓库|repository)([\w-]+)', text, re.IGNORECASE)
+    runId_match = re.search(r'(?:runId|CI\s+runId|CI\s+运行ID|CI运行)[\s:=：、，;]*(\d+)', text, re.IGNORECASE)
+    if not runId_match:
+        runId_match = re.search(r'(?:runId|CI\s+runId|CI\s+运行ID|CI运行)(\d+)', text, re.IGNORECASE)
+    pr_match = re.search(r'(?:PR|pr|Pull\s+Request|拉取请求)[\s#：、，;]*(\d+)', text, re.IGNORECASE)
+    if not pr_match:
+        pr_match = re.search(r'(?:PR|pr|Pull\s+Request|拉取请求)#?(\d+)', text, re.IGNORECASE)
+    jobId_match = re.search(r'(?:jobId|任务|job|DF-)[\s:=：、，;]*(DF-\d+)', text, re.IGNORECASE)
+    if not jobId_match:
+        jobId_match = re.search(r'(?:jobId|任务|job|DF-)(DF-\d+)', text, re.IGNORECASE)
 
     repo = repo_match.group(1).strip() if repo_match else None
     runId = runId_match.group(1).strip() if runId_match else None
@@ -38,8 +46,10 @@ async def execute(data: dict, ctx) -> dict:
     # Call tools
     try:
         log_res = await ctx.tools.call("ci.log.fetch", repo=repo, runId=runId)
-        if not isinstance(log_res, dict) or "log" not in log_res or not isinstance(log_res["log"], str) or not log_res["log"].strip() or log_res.get("logsUnavailable") == True:
+        if not isinstance(log_res, dict) or "log" not in log_res or not isinstance(log_res["log"], str) or log_res.get("logsUnavailable") == True:
             return {"decision": "BLOCKED", "block_reason": "ci.log.fetch returned no usable log or logsUnavailable=true"}
+        if not log_res["log"].strip():
+            return {"decision": "BLOCKED", "block_reason": "ci.log.fetch returned empty log text"}
 
         diff_res = await ctx.tools.call("git.pr.diff", repo=repo, number=pr_number)
         if not isinstance(diff_res, dict) or "diff" not in diff_res or not isinstance(diff_res["diff"], str) or not diff_res["diff"].strip():
@@ -98,6 +108,12 @@ async def execute(data: dict, ctx) -> dict:
             decision = decision_obj.get("decision")
             if decision not in ["PASS", "BLOCKED"]:
                 return {"decision": "BLOCKED", "block_reason": "LLM output decision must be 'PASS' or 'BLOCKED'"}
+            # Enforce: PASS must NOT have block_reason; BLOCKED must have non-empty block_reason
+            block_reason = decision_obj.get("block_reason")
+            if decision == "PASS" and block_reason and isinstance(block_reason, str) and block_reason.strip():
+                return {"decision": "BLOCKED", "block_reason": "LLM returned PASS with non-empty block_reason"}
+            if decision == "BLOCKED" and (not block_reason or not isinstance(block_reason, str) or not block_reason.strip()):
+                return {"decision": "BLOCKED", "block_reason": "LLM returned BLOCKED without non-empty block_reason"}
             result = {"decision": decision}
             if decision == "PASS":
                 result.update({
@@ -106,7 +122,7 @@ async def execute(data: dict, ctx) -> dict:
                     "diff_summary": diff_summary
                 })
             else:
-                result["block_reason"] = decision_obj.get("block_reason", "LLM returned BLOCKED without reason")
+                result["block_reason"] = block_reason
             return result
         except (json.JSONDecodeError, ValueError, AttributeError):
             return {"decision": "BLOCKED", "block_reason": "LLM output is not valid JSON or lacks 'decision' field"}
