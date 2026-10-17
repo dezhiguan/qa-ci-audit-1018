@@ -80,21 +80,17 @@ async def execute(data: dict, ctx) -> dict:
         removed = sum(1 for l in diff_lines if l.startswith("-") and not l.startswith("---"))
         diff_summary = f"{len(diff_lines)} lines total; +{added} / -{removed} changes"
 
-        # Compile prompt with real evidence
+        # Compile prompt with field descriptions only (no real data in system)
         prompt = await ctx.prompt("role")
-        compiled_prompt = prompt.compile(input=text, evidence={
-            "ci_log": log_res["log"],
-            "pr_diff": diff_res["diff"],
-            "job_records": job_res
-        })
+        compiled_prompt = prompt.compile(input="Natural language input containing repo, runId, PR number, jobId", evidence="JSON object with keys: ci_log (str), pr_diff (str), job_records (list)")
 
-        # Send to LLM
-        llm_input = [{"role": "user", "content": json.dumps({"input": text, "evidence": {
+        # Send to LLM: real data goes ONLY in user message
+        llm_input = [{"role": "system", "content": compiled_prompt}, {"role": "user", "content": json.dumps({"input": text, "evidence": {
             "ci_log": log_res["log"],
             "pr_diff": diff_res["diff"],
             "job_records": job_res
         }}, ensure_ascii=False)}]
-        llm_output = await ctx.llm.chat(llm_input, prompt=compiled_prompt)
+        llm_output = await ctx.llm.chat(llm_input, prompt=prompt)
 
         # Parse decision
         try:
