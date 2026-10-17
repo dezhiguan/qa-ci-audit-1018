@@ -23,11 +23,12 @@ You will receive a JSON object with:
 
 ## Output Rules
 - Output **only** a valid JSON object.
-- Must contain exactly one top-level key: `decision`.
-- `decision` must be either "PASS" or "BLOCKED".
-- If `decision` is "BLOCKED", include non-empty `block_reason` (string) explaining why.
-- If `decision` is "PASS", do **not** include `block_reason`, or ensure it is omitted or empty.
-- Do **not** invent fields like `evidence_sources`, `steps`, or `diff_summary`. Those are assembled by outer code.
+- This section only constrains the `ctx.llm.chat` model response.
+- Allowed top-level keys: `decision` (required) and optionally `block_reason`.
+- `decision` must be exactly "PASS" or "BLOCKED".
+- If `decision` is "BLOCKED", `block_reason` must be present and a non-empty string.
+- If `decision` is "PASS", `block_reason` must be omitted or an empty string (not null, not number, not array/object).
+- Do **not** invent fields like `evidence_sources`, `steps`, or `diff_summary`. Those are assembled by outer `execute` code.
 - Do **not** output markdown, explanations, or anything outside the JSON object.
 
 ## Critical Constraints

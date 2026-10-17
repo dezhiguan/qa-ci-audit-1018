@@ -8,10 +8,11 @@ async def execute(data: dict, ctx) -> dict:
     if not isinstance(text, str):
         return {"decision": "BLOCKED", "block_reason": "input.text must be a string"}
 
-    # Extract identifiers using robust regex — support tight patterns like "repoqa-evidence-7392" or "runId987654321"
-    repo_match = re.search(r'(?:repo|仓库|repository)[\s:=：、，;]*([\w-]+)', text, re.IGNORECASE)
+    # Extract identifiers with strict ASCII repo slug: [a-z][a-z0-9-]{0,62}
+    # Match labels case-insensitively; Chinese chars act as boundaries, not part of slug
+    repo_match = re.search(r'(?:repo|仓库|repository)[\s:=：、，;]*([a-z][a-z0-9-]{0,62})', text, re.IGNORECASE)
     if not repo_match:
-        repo_match = re.search(r'(?:repo|仓库|repository)([\w-]+)', text, re.IGNORECASE)
+        repo_match = re.search(r'(?:repo|仓库|repository)([a-z][a-z0-9-]{0,62})', text, re.IGNORECASE)
     runId_match = re.search(r'(?:runId|CI\s+runId|CI\s+运行ID|CI运行)[\s:=：、，;]*(\d+)', text, re.IGNORECASE)
     if not runId_match:
         runId_match = re.search(r'(?:runId|CI\s+runId|CI\s+运行ID|CI运行)(\d+)', text, re.IGNORECASE)
@@ -61,13 +62,25 @@ async def execute(data: dict, ctx) -> dict:
         if not job_res:
             return {"decision": "BLOCKED", "block_reason": "devflow.job.read returned empty list"}
 
-        # Check for UNKNOWN state in any job record
-        has_unknown = any(
-            record.get("status") == "UNKNOWN" or record.get("state") == "UNKNOWN"
-            for record in job_res
-        )
-        if has_unknown:
-            return {"decision": "BLOCKED", "block_reason": "job contains UNKNOWN status"}
+        # Check for UNKNOWN state in any job record: status/state must be non-empty str, not UNKNOWN
+        has_unknown_or_invalid = False
+        for record in job_res:
+            status = record.get("status")
+            state = record.get("state")
+            # At least one of status/state must be non-empty string and not UNKNOWN
+            if (isinstance(status, str) and status.strip() and status.strip() != "UNKNOWN") or \
+               (isinstance(state, str) and state.strip() and state.strip() != "UNKNOWN"):
+                continue
+            # If neither qualifies, mark invalid
+            if not (isinstance(status, str) and status.strip()) and not (isinstance(state, str) and state.strip()):
+                has_unknown_or_invalid = True
+                break
+            if (isinstance(status, str) and status.strip() == "UNKNOWN") or \
+               (isinstance(state, str) and state.strip() == "UNKNOWN"):
+                has_unknown_or_invalid = True
+                break
+        if has_unknown_or_invalid:
+            return {"decision": "BLOCKED", "block_reason": "job contains UNKNOWN, missing, or blank status/state"}
 
         # Assemble evidence
         evidence_sources = [
@@ -108,12 +121,15 @@ async def execute(data: dict, ctx) -> dict:
             decision = decision_obj.get("decision")
             if decision not in ["PASS", "BLOCKED"]:
                 return {"decision": "BLOCKED", "block_reason": "LLM output decision must be 'PASS' or 'BLOCKED'"}
-            # Enforce: PASS must NOT have block_reason; BLOCKED must have non-empty block_reason
+            # Enforce block_reason typing & presence
             block_reason = decision_obj.get("block_reason")
-            if decision == "PASS" and block_reason and isinstance(block_reason, str) and block_reason.strip():
-                return {"decision": "BLOCKED", "block_reason": "LLM returned PASS with non-empty block_reason"}
-            if decision == "BLOCKED" and (not block_reason or not isinstance(block_reason, str) or not block_reason.strip()):
-                return {"decision": "BLOCKED", "block_reason": "LLM returned BLOCKED without non-empty block_reason"}
+            if decision == "PASS":
+                if block_reason is not None:
+                    if not isinstance(block_reason, str) or block_reason.strip():
+                        return {"decision": "BLOCKED", "block_reason": "LLM returned PASS with non-string or non-empty block_reason"}
+            elif decision == "BLOCKED":
+                if not isinstance(block_reason, str) or not block_reason.strip():
+                    return {"decision": "BLOCKED", "block_reason": "LLM returned BLOCKED without non-empty string block_reason"}
             result = {"decision": decision}
             if decision == "PASS":
                 result.update({
