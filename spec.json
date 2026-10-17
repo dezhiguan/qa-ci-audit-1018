@@ -1,0 +1,13 @@
+{
+  "io": "input.text为普通中文/英文自然语言，明确包含仓库slug、CI runId、PR #正整数、任务DF-编号。例：请核验仓库qa-ci-auditor-1017b的CI runId 39053829490、PR #1、任务DF-0010；不代表自动合并或发布。输出decision、evidence_sources、steps、diff_summary、block_reason。JSON对象允许这些附加字段。 支持中文顿号/逗号/冒号、英文标点和等号分隔，例如repo=qa-ci-auditor-1017b，runId=39053829490，PR #1，jobId=DF-0006。必须提取对应字段，不能跨字段抓数字。",
+  "goal": "用日志、PR差异与研发任务三类真实只读证据完成可追溯审计；PASS仅表示证据齐全且审计完成，不表示被审任务成功或有权发布。",
+  "risks": [
+    "误将UNKNOWN状态当作可审计状态",
+    "未校验工具调用结果非空导致证据链断裂",
+    "混淆用户边界说明（如‘不代表自动合并’）为越权行为而错误拦截"
+  ],
+  "title": "CI证据审计员·新版底座验证",
+  "users": "研发人员复核明确指定的仓库、CI运行、PR和任务记录。",
+  "pending": [],
+  "success": "准确提取对应对象标识并使用ci.log.fetch(repo,runId字符串)、git.pr.diff(repo,number正整数)、devflow.job.read(jobId)；三种必需证据都要调用和核对。任务RUN/WAIT/HUMAN/QUEUED/DONE/FAIL/CANCEL等已知状态都是可审计事实，不能增加只允许任务成功或终态的条件；UNKNOWN/空/缺失才是状态不明。已知失败/取消要如实写入摘要，在证据齐全并完成审计时可PASS。岗位指令从版本化提示词读取，写入system；原始用户请求、工具返回、子智能体材料只放user数据，不能compile进system。模型输出章节仅约束ctx.llm.chat响应；execute外层必须组装真实证据和步骤。严格json.loads解析模型decision，模型BLOCKED不得变成PASS。任何所需对象标识缺失、工具失败、空log/diff/job列表、UNKNOWN状态或越权发布请求均BLOCKED；不猜最新run、不硬编码题目或具体ID。正常的“不代表自动合并或发布”是边界说明，不能误当越权。"
+}
