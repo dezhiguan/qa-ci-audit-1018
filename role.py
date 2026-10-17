@@ -38,11 +38,11 @@ async def execute(data: dict, ctx) -> dict:
     # Call tools
     try:
         log_res = await ctx.tools.call("ci.log.fetch", repo=repo, runId=runId)
-        if not isinstance(log_res, dict) or ("log" not in log_res and log_res.get("logsUnavailable")):
+        if not isinstance(log_res, dict) or "log" not in log_res or not isinstance(log_res["log"], str) or not log_res["log"].strip():
             return {"decision": "BLOCKED", "block_reason": "ci.log.fetch returned no usable log"}
 
         diff_res = await ctx.tools.call("git.pr.diff", repo=repo, number=pr_number)
-        if not isinstance(diff_res, dict) or "diff" not in diff_res or not isinstance(diff_res["diff"], str):
+        if not isinstance(diff_res, dict) or "diff" not in diff_res or not isinstance(diff_res["diff"], str) or not diff_res["diff"].strip():
             return {"decision": "BLOCKED", "block_reason": "git.pr.diff returned no usable diff"}
 
         job_res = await ctx.tools.call("devflow.job.read", jobId=jobId)
@@ -83,14 +83,14 @@ async def execute(data: dict, ctx) -> dict:
         # Compile prompt with real evidence
         prompt = await ctx.prompt("role")
         compiled_prompt = prompt.compile(input=text, evidence={
-            "ci_log": log_res.get("log", ""),
+            "ci_log": log_res["log"],
             "pr_diff": diff_res["diff"],
             "job_records": job_res
         })
 
         # Send to LLM
         llm_input = [{"role": "user", "content": json.dumps({"input": text, "evidence": {
-            "ci_log": log_res.get("log", ""),
+            "ci_log": log_res["log"],
             "pr_diff": diff_res["diff"],
             "job_records": job_res
         }}, ensure_ascii=False)}]

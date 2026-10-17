@@ -17,8 +17,8 @@ Also included: boundary clarifications like "do not publish", "no auto merge", "
 
 ## Evidence
 You will receive a JSON object with:
-- `ci_log`: full CI log text (string)
-- `pr_diff`: unified diff text (string)
+- `ci_log`: full CI log text (non-empty string)
+- `pr_diff`: unified diff text (non-empty string)
 - `job_records`: list of devflow job objects (non-empty list; each may have `status`, `state`, `result`, etc.)
 
 ## Output Rules
