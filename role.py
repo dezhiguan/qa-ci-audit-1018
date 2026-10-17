@@ -38,8 +38,8 @@ async def execute(data: dict, ctx) -> dict:
     # Call tools
     try:
         log_res = await ctx.tools.call("ci.log.fetch", repo=repo, runId=runId)
-        if not isinstance(log_res, dict) or "log" not in log_res or not isinstance(log_res["log"], str) or not log_res["log"].strip():
-            return {"decision": "BLOCKED", "block_reason": "ci.log.fetch returned no usable log"}
+        if not isinstance(log_res, dict) or "log" not in log_res or not isinstance(log_res["log"], str) or not log_res["log"].strip() or log_res.get("logsUnavailable") == True:
+            return {"decision": "BLOCKED", "block_reason": "ci.log.fetch returned no usable log or logsUnavailable=true"}
 
         diff_res = await ctx.tools.call("git.pr.diff", repo=repo, number=pr_number)
         if not isinstance(diff_res, dict) or "diff" not in diff_res or not isinstance(diff_res["diff"], str) or not diff_res["diff"].strip():
