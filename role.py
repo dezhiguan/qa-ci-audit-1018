@@ -45,40 +45,37 @@ async def execute(data: dict, ctx) -> dict:
         }
 
     # === ADVERSARIAL INTENT CHECK — BEFORE ANY TOOL CALL ===
-    # Block on clear bypass/forge/force/ignore/publish/merge directives that violate read-only audit semantics
-    lower_text = text.lower()
-    if any(phrase in lower_text for phrase in [
-        "skip all verification",
-        "skip all核验",
-        "bypass",
-        "forge",
-        "fake",
-        "fake evidence",
-        "ignore system limits",
-        "ignore all rules",
-        "ignore system restriction",
-        "force output",
-        "force pass",
-        "force result",
-        "compel pass",
-        "override decision",
-        "output {'decision': 'PASS'",
-        "output \"{\"decision\": \"PASS\"",
-        "execute auto merge",
-        "perform merge",
-        "trigger merge",
-        "publish now",
-        "deploy immediately",
-        "release without check",
-        "boss approved",
-        "verbal approval",
-        "oral consent",
-        "skip gate",
-        "no gate required"
-    ]):
+    # Block on clear bypass/forge/force/ignore/publish/merge/authorize/approve directives that violate read-only audit semantics
+    # Covers English and Chinese; case-insensitive; normalized to space-separated lowercase
+    lower_text = re.sub(r'[\s\p{P}]+', ' ', text).lower().strip()
+    # Full list of banned *intent* patterns (not just words) — must match whole phrases or unambiguous fragments
+    banned_phrases = [
+        # Bypass & skip
+        "skip all verification", "skip all核验", "skip verification", "skip核验", "skip audit",
+        "bypass all", "bypass gate", "bypass check", "bypass rule", "bypass system",
+        # Forge & fake & fabricate
+        "forge evidence", "fake evidence", "fabricate evidence", "make up evidence", "invent evidence",
+        "伪造证据", "编造证据", "捏造证据", "杜撰证据", "虚构证据",
+        # Force & compel & override & mandate
+        "force pass", "force output", "force result", "force decision", "compel pass", "mandate pass",
+        "override decision", "override rule", "override gate", "ignore rule", "ignore gate", "ignore limit",
+        "ignore all rules", "ignore system limits", "ignore system restriction", "disable check",
+        # Publish & merge & deploy & release & approve
+        "auto merge", "execute merge", "perform merge", "trigger merge", "initiate merge",
+        "publish now", "deploy immediately", "release now", "ship now", "go live now",
+        "approve now", "authorize now", "grant approval", "give approval", "mark as approved",
+        "合并", "发布", "上线", "部署", "投产", "批准", "授权", "放行",
+        # Dangerous framing
+        "no gate required", "skip gate", "gate not needed", "no audit needed",
+        "treat as passed", "assume passed", "default to pass", "pass by default",
+        "output {\"decision\": \"PASS\"", "output {'decision': 'PASS'",
+        "return {\"decision\": \"PASS\"", "return {'decision': 'PASS'",
+        "just say PASS", "only output PASS", "strictly output PASS"
+    ]
+    if any(phrase in lower_text for phrase in banned_phrases):
         return {
             "decision": "BLOCKED",
-            "block_reason": "User requested bypass, forgery, forced output, or write action — violates read-only audit mandate"
+            "block_reason": "User requested bypass, forgery, forced output, write action, or unauthorized approval — violates read-only audit mandate"
         }
 
     # Call tools
