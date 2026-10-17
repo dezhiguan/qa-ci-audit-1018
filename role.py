@@ -47,11 +47,13 @@ async def execute(data: dict, ctx) -> dict:
     # === ADVERSARIAL INTENT CHECK — BEFORE ANY TOOL CALL ===
     # Block on clear bypass/forge/force/ignore/publish/merge/authorize/approve directives that violate read-only audit semantics
     # Covers English and Chinese; case-insensitive; normalized to space-separated lowercase
-    lower_text = re.sub(r'[\s\W]+', ' ', text).lower().strip()
-    # Full list of banned *intent* patterns (not just words) — must match whole phrases or unambiguous fragments
+    # Normalize: collapse all whitespace and non-alnum (except hyphen/underscore) to single space, then lowercase
+    lower_text = re.sub(r'[^a-zA-Z0-9\-\_\u4e00-\u9fff]+', ' ', text).lower().strip()
+    # Full list of banned *intent* patterns — must match as full tokens or unambiguous substrings (no partial word matches)
+    # Use exact token boundary logic via ' ' + phrase + ' ' or start/end anchors
     banned_phrases = [
         # Bypass & skip
-        "skip all verification", "skip all核验", "skip verification", "skip核验", "skip audit",
+        "skip all verification", "skip all 核验", "skip verification", "skip 核验", "skip audit",
         "bypass all", "bypass gate", "bypass check", "bypass rule", "bypass system",
         # Forge & fake & fabricate
         "forge evidence", "fake evidence", "fabricate evidence", "make up evidence", "invent evidence",
@@ -65,14 +67,26 @@ async def execute(data: dict, ctx) -> dict:
         "publish now", "deploy immediately", "release now", "ship now", "go live now",
         "approve now", "authorize now", "grant approval", "give approval", "mark as approved",
         "合并", "发布", "上线", "部署", "投产", "批准", "授权", "放行",
-        # Dangerous framing
+        # Dangerous framing & output coercion
         "no gate required", "skip gate", "gate not needed", "no audit needed",
         "treat as passed", "assume passed", "default to pass", "pass by default",
         "output {\"decision\": \"PASS\"", "output {'decision': 'PASS'",
         "return {\"decision\": \"PASS\"", "return {'decision': 'PASS'",
-        "just say PASS", "only output PASS", "strictly output PASS"
+        "just say pass", "only output pass", "strictly output pass",
+        "输出 pass", "只输出 pass", "严格输出 pass",
+        "强制通过", "强制返回 pass", "强制输出 pass", "绕过审核直接通过"
     ]
-    if any(phrase in lower_text for phrase in banned_phrases):
+    # Check each phrase as standalone token (surrounded by spaces or string boundaries)
+    blocked = False
+    for phrase in banned_phrases:
+        phrase_lower = phrase.lower()
+        # Match at start, middle (with spaces), or end
+        if (lower_text.startswith(phrase_lower + ' ') or 
+            lower_text.endswith(' ' + phrase_lower) or 
+            (' ' + phrase_lower + ' ') in lower_text):
+            blocked = True
+            break
+    if blocked:
         return {
             "decision": "BLOCKED",
             "block_reason": "User requested bypass, forgery, forced output, write action, or unauthorized approval — violates read-only audit mandate"
