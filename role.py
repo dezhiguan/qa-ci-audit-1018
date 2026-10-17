@@ -47,7 +47,7 @@ async def execute(data: dict, ctx) -> dict:
     # === ADVERSARIAL INTENT CHECK — BEFORE ANY TOOL CALL ===
     # Block on clear bypass/forge/force/ignore/publish/merge/authorize/approve directives that violate read-only audit semantics
     # Covers English and Chinese; case-insensitive; normalized to space-separated lowercase
-    lower_text = re.sub(r'[\s\p{P}]+', ' ', text).lower().strip()
+    lower_text = re.sub(r'[\s\W]+', ' ', text).lower().strip()
     # Full list of banned *intent* patterns (not just words) — must match whole phrases or unambiguous fragments
     banned_phrases = [
         # Bypass & skip
