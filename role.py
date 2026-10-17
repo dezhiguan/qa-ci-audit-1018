@@ -10,9 +10,9 @@ async def execute(data: dict, ctx) -> dict:
 
     # Extract identifiers with strict ASCII repo slug: [a-z][a-z0-9-]{0,62}
     # Match labels case-insensitively; Chinese chars act as boundaries, not part of slug
-    repo_match = re.search(r'(?:repo|仓库|repository)[\s:=：、，;]*([a-z][a-z0-9-]{0,62})', text, re.IGNORECASE)
+    repo_match = re.search(r'(?:repository|repo|仓库)[\s:=：、，;]*([a-z][a-z0-9-]{0,62})', text, re.IGNORECASE)
     if not repo_match:
-        repo_match = re.search(r'(?:repo|仓库|repository)([a-z][a-z0-9-]{0,62})', text, re.IGNORECASE)
+        repo_match = re.search(r'(?:repository|repo|仓库)([a-z][a-z0-9-]{0,62})', text, re.IGNORECASE)
     runId_match = re.search(r'(?:runId|CI\s+runId|CI\s+运行ID|CI运行)[\s:=：、，;]*(\d+)', text, re.IGNORECASE)
     if not runId_match:
         runId_match = re.search(r'(?:runId|CI\s+runId|CI\s+运行ID|CI运行)(\d+)', text, re.IGNORECASE)
@@ -127,6 +127,10 @@ async def execute(data: dict, ctx) -> dict:
                 if block_reason is not None:
                     if not isinstance(block_reason, str) or block_reason.strip():
                         return {"decision": "BLOCKED", "block_reason": "LLM returned PASS with non-string or non-empty block_reason"}
+                # Also BLOCKED if block_reason is null (None is already handled above; JSON null becomes None in Python)
+                # But per spec: 'PASS' must omit block_reason OR have empty string — no null/123/[]/{}
+                # So explicit check for None is redundant (covered), but we *must* reject falsy non-empty-string like 0, [], {}, etc.
+                # Already covered by `not isinstance(..., str)` — keep as-is.
             elif decision == "BLOCKED":
                 if not isinstance(block_reason, str) or not block_reason.strip():
                     return {"decision": "BLOCKED", "block_reason": "LLM returned BLOCKED without non-empty string block_reason"}
